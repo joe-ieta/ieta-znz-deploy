@@ -1,0 +1,11 @@
+# Container image archives are local Docker artifacts, not source files.
+/images/
+*.tar
+
+# Model files are deployment-specific and may be very large.
+models/*
+!models/.gitkeep
+
+# Local runtime overrides and generated files.
+.env.local
+*.log

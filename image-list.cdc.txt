@@ -1,0 +1,2 @@
+docker.elastic.co/elasticsearch/elasticsearch:7.17.29
+flink:1.20.3-scala_2.12-java17
