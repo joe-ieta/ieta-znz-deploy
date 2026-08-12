@@ -6,6 +6,9 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      IETA_CORE_PASSWORD: ${IETA_CORE_PASSWORD}
+      IETA_CDC_WRITER_PASSWORD: ${IETA_CDC_WRITER_PASSWORD}
+      IETA_CDC_OPS_PASSWORD: ${IETA_CDC_OPS_PASSWORD}
     ports:
       - ${POSTGRES_PORT}:5432
     volumes:
@@ -111,7 +114,7 @@ services:
     networks:
       - ieta-znz-deploy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:9200 >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fs -u elastic:${ELASTIC_PASSWORD} http://localhost:9200 >/dev/null || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 120
@@ -123,7 +126,8 @@ services:
     environment:
       node.name: es7-cdc
       discovery.type: single-node
-      xpack.security.enabled: "false"
+      xpack.security.enabled: ${ES7_SECURITY_ENABLED:-false}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
       bootstrap.memory_lock: "false"
       ES_JAVA_OPTS: -Xms512m -Xmx512m
     mem_limit: ${ES7_MEM_LIMIT}
@@ -134,7 +138,7 @@ services:
     networks:
       - ieta-znz-deploy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:9200 >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fs -u elastic:${ELASTIC_PASSWORD} http://localhost:9200 >/dev/null || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 120
@@ -147,12 +151,18 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
+        jobmanager.memory.process.size: ${FLINK_JM_MEMORY:-2g}
     ports:
       - ${FLINK_REST_PORT}:8081
     volumes:
       - flink_lib:/opt/flink/lib/ieta
     networks:
       - ieta-znz-deploy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/overview >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
     restart: unless-stopped
 
   flink-taskmanager:
@@ -162,13 +172,19 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
-        taskmanager.numberOfTaskSlots: 4
+        taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-21}
+        taskmanager.memory.process.size: ${FLINK_TM_MEMORY:-5g}
     depends_on:
       - flink-jobmanager
     volumes:
       - flink_lib:/opt/flink/lib/ieta
     networks:
       - ieta-znz-deploy
+    healthcheck:
+      test: ["CMD-SHELL", "ps -ef | grep -v grep | grep -q taskmanager || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
     restart: unless-stopped
 
   onlyoffice-document-server:
@@ -184,30 +200,6 @@ services:
       - onlyoffice_log:/var/log/onlyoffice
       - onlyoffice_lib:/var/lib/onlyoffice
       - onlyoffice_db:/var/lib/postgresql
-    networks:
-      - ieta-znz-deploy
-    restart: unless-stopped
-
-  llama-cpp:
-    image: ghcr.io/ggml-org/llama.cpp:server-b10015
-    profiles: ["llm", "llama-cpp"]
-    command: ["-m", "${LLAMA_CPP_MODEL}", "--host", "0.0.0.0", "--port", "8080", "--ctx-size", "4096"]
-    ports:
-      - ${LLAMA_CPP_PORT}:8080
-    volumes:
-      - ./models:/models:ro
-    networks:
-      - ieta-znz-deploy
-    restart: unless-stopped
-
-  vllm:
-    image: vllm/vllm-openai:v0.25.0
-    profiles: ["llm", "vllm"]
-    command: ["--host", "0.0.0.0", "--port", "8000", "--model", "${VLLM_MODEL}"]
-    ports:
-      - ${VLLM_PORT}:8000
-    volumes:
-      - ./models:/models:ro
     networks:
       - ieta-znz-deploy
     restart: unless-stopped

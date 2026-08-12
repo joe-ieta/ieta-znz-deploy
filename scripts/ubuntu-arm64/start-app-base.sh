@@ -26,6 +26,7 @@ if [[ -z "$capabilities" ]]; then
 fi
 
 cd "$BASE_DIR"
+bash "$SCRIPT_DIR/load-images.sh"
 compose_args=(compose --project-name "$PROJECT_NAME" -f docker-compose.ieta-znz-deploy.yml)
 IFS=',' read -ra caps <<< "$capabilities"
 for cap in "${caps[@]}"; do

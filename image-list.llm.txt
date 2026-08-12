@@ -1,2 +1,0 @@
-ghcr.io/ggml-org/llama.cpp:server-b10015
-vllm/vllm-openai:v0.25.0

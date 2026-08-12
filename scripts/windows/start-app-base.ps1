@@ -2,7 +2,8 @@ param(
   [Parameter(Mandatory=$true)][string]$App,
   [string]$DockerExe = "docker",
   [string]$ProjectName = "ieta-znz-deploy",
-  [switch]$SkipPortCheck
+  [switch]$SkipPortCheck,
+  [switch]$SkipImageLoad
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,4 +41,4 @@ if (-not $capabilities -or $capabilities.Count -eq 0) {
 }
 
 Write-Host "Starting base capabilities: $($capabilities -join ', ')"
-& (Join-Path $baseDir "start-base-env.ps1") -Profiles $capabilities -DockerExe $DockerExe -ProjectName $ProjectName -SkipPortCheck:$SkipPortCheck
+& (Join-Path $baseDir "start-base-env.ps1") -Profiles $capabilities -DockerExe $DockerExe -ProjectName $ProjectName -SkipPortCheck:$SkipPortCheck -SkipImageLoad:$SkipImageLoad
