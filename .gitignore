@@ -2,6 +2,9 @@
 /images/
 *.tar
 
+# Release artifact assembled by publish-release.ps1 (contains image archives, not for Git).
+/ieta-znz-deploy-release/
+
 # Model files are deployment-specific and may be very large.
 models/*
 !models/.gitkeep

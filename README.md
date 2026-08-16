@@ -60,16 +60,18 @@ INCLUDE_LLM=1 bash scripts/ubuntu-arm64/pull-images.sh
 ieta-znz-deploy/
   apps/                         # 应用到基础能力的声明清单
   docs/                         # 定位、接入、运维和待办文档
-  init/                         # 基础数据库首次初始化脚本
+  init/                         # 基础数据库首次初始化脚本（optional/ 为可选脚本，不自动执行）
   models/                       # 可选本地模型文件，不纳入 Git
   project-env/                  # 应用连接基础环境的环境变量模板
-  scripts/common/               # 能力到服务的公共清单
+  scripts/common/               # 能力到服务的公共清单、离线镜像归档清单
   scripts/windows/              # Windows 运维脚本
   scripts/ubuntu-amd64/         # Ubuntu AMD64 运维脚本
   scripts/ubuntu-arm64/         # Ubuntu ARM64 运维脚本
   image-list*.txt               # 固定版本镜像引用
   docker-compose.ieta-znz-deploy.yml
   .env
+  check-release.ps1             # 发布前配置一致性检查
+  publish-release.ps1           # 发布物组装（拒绝脏工作区，生成 release-info.json / release-files.sha256）
 ```
 
 ## 快速使用
@@ -157,3 +159,12 @@ networks:
 ```
 
 容器间使用稳定服务名访问基础能力，例如 `postgres:5432`、`mysql8:3306`、`minio:9000`、`valkey:6379`。宿主机端口只用于开发和运维，不是容器间契约。
+
+## 发布
+
+```powershell
+.\check-release.ps1          # Compose、固定镜像、镜像清单、端口一致性检查
+.\publish-release.ps1        # 干净工作区 + 离线归档校验通过后生成 ieta-znz-deploy-release/
+```
+
+发布物含 `release-info.json`（`sourceDirty=false`、`sourceCommit` 可解析、`imageDelivery=local-offline-archives-only`）与 `release-files.sha256`。离线镜像归档按 `scripts/common/image-archives.txt` 校验 tar 内 RepoTags 与固定镜像引用一致。Flink 槽位/副本/内存、ES7 可选认证等运行参数与运维细节见 `docs/operations-guide.md`。

@@ -73,14 +73,14 @@
 ### OI-009 服务就绪和运行级验收
 
 - 状态：open
-- 现状：Compose 能通过静态配置校验，但尚未形成各平台全量启动、健康、持久化和应用连接的统一验收记录；Flink、OnlyOffice 和 LLM 等服务缺少完整健康检查。
+- 现状：Compose 能通过静态配置校验，但尚未形成各平台全量启动、健康、持久化和应用连接的统一验收记录。已补齐：`flink-jobmanager` 的 `/overview` healthcheck（2026-08-16）；Linux `status-app-base.sh` 以"服务 healthy + 宿主机端口探测"为成功标准并输出各端口状态（`HOST_PROBES` 声明于应用清单）。OnlyOffice 和 LLM 等服务仍缺健康检查，运行级验收矩阵待建立。
 - 目标：建立按 capability 的 smoke test，覆盖首次启动、重复启动、重启、数据保留和真实客户端连接。
 - 验收：每个目标平台发布前生成可追溯的测试结果。
 
 ### OI-010 数据隔离和最小权限
 
 - 状态：open
-- 现状：部分连接模板直接使用 PostgreSQL `postgres` 或 MySQL root 密码，初始化脚本承担了少量应用库创建。
+- 现状：部分连接模板直接使用 PostgreSQL `postgres` 或 MySQL root 密码，初始化脚本承担了少量应用库创建。已补齐：`init/postgres/optional/01-ieta-cdc-minimal-privileges.sql`（可选、默认不执行）按消费方容量指南提供 `ieta_core`/`ieta_cdc_writer`/`ieta_cdc_ops` 角色分离，运维文档明确"超级用户仅限开发联调"。应用默认仍使用超级用户模板，切换为最小权限账号尚未落地。
 - 目标：每个应用使用独立 database/schema、用户和最小权限；业务迁移回归应用发布包。
 - 验收：应用运行不依赖数据库超级用户，撤销某应用账号不会影响其他应用。
 
@@ -94,7 +94,7 @@
 ### OI-012 发布校验自动化
 
 - 状态：open
-- 现状：`check-release.ps1` 已校验 Compose、固定标签和镜像总清单一致性，但尚未覆盖 Linux shell 语法、应用清单、敏感信息和远端 manifest。
+- 现状：`check-release.ps1` 已校验 Compose、固定标签、镜像总清单一致性，并新增 `.env` 与 `project-env/*.host.env` 端口一致性（2026-08-16）；新增 `publish-release.ps1` 拒绝脏工作区发布并校验离线归档 RepoTags。尚未覆盖 Linux shell 语法、应用清单引用、敏感信息检查和可选 registry manifest 检查。
 - 目标：增加跨平台脚本静态检查、应用清单引用检查、敏感信息检查和可选 registry manifest 检查。
 - 验收：CI 或发布脚本能对首版交付要求给出明确成功/失败结果。
 
@@ -120,6 +120,24 @@
 - 现状：当前主要依赖 `docker compose ps` 和容器日志，没有统一指标、日志保留或告警约定。
 - 目标：定义共享基础服务的监控指标、日志位置、告警责任和应用侧关联信息。
 - 验收：常见故障能够从统一入口定位到服务、应用和数据边界。
+
+## 需求批次记录
+
+### OI-016 ieta-cdc-core 发布物能力要求（R1-R9）落地
+
+- 状态：done
+- 来源：`ieta-cdc-core` 消费方 `docs/operations/ieta-znz-deploy-requirements.md`。
+- 实现：
+  - R1：`FLINK_TASK_SLOTS=21`（不低于 21）、`FLINK_TM_REPLICAS=3` 默认 3 个 TaskManager 副本，`apps/ieta-cdc-core.env` 声明 `FLINK_TOTAL_SLOTS=63`；
+  - R2：`FLINK_JM_MEM`/`FLINK_TM_MEM` 注入 `FLINK_PROPERTIES`；
+  - R3：`flink_lib` 卷生命周期文档化，`scripts/ubuntu-{amd64,arm64}/update-flink-lib.sh` 放置 connector，Runner JAR 重建后一致性检查指引；
+  - R4：`flink-jobmanager` healthcheck（`/overview`），Linux `status-app-base.sh` 增加 healthy 判定与宿主机端口探测（15432/19200/19081）；
+  - R5：`check-release.ps1` 校验 `.env` 与 `project-env/*.host.env` 端口一致；
+  - R6：`publish-release.ps1` 拒绝脏工作区，`release-info.json` 的 `sourceDirty` 恒为 false 并记录 `sourceCommit`；
+  - R7：`ES7_SECURITY_ENABLED`/`ELASTIC_PASSWORD` 环境变量化，健康检查与宿主机探测感知认证，文档声明无 TLS 边界；
+  - R8：可选最小权限脚本与角色分离说明（`ieta_core`/`ieta_cdc_writer`/`ieta_cdc_ops`）；
+  - R9：`BUILD_STATUS.md` 补充 Flink/connector/PG/MySQL/ES7 兼容性声明与验证状态。
+- 验证：静态校验（compose 配置、脚本语法、端口一致性逻辑）通过；运行级验收（`/overview` 槽位随配置变化、内存配置生效、认证切换、连接器加载）由发布方在目标平台执行并记录到 `BUILD_STATUS.md`。
 
 ## 当前命名基线
 
