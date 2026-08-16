@@ -43,9 +43,9 @@ The canonical combined list is `image-list.txt`. Profile-specific lists are used
 - llama.cpp server-b10015 manifest: linux/amd64 and linux/arm64 confirmed
 - vLLM v0.25.0 manifest: linux/amd64 and linux/arm64 confirmed
 - `check-release.ps1` also enforces `.env` host ports (POSTGRES_PORT, MYSQL_PORT, ES7_CDC_PORT, FLINK_REST_PORT) against `project-env/*.host.env` (added 2026-08-16)
-- `publish-release.ps1` refuses a dirty worktree, verifies offline archives against `scripts/common/image-archives.txt` (existence and tar-internal RepoTags), and writes `release-info.json` with `sourceDirty=false` plus `release-files.sha256` (added 2026-08-16). The release artifact is assembled at a sibling directory `ieta-znz-deploy-release/` next to the repository checkout.
+- `publish-release.ps1` refuses a dirty worktree, verifies offline archives against `scripts/common/image-archives.txt` (existence, tar-internal RepoTags, and each listed tag must be one of the pinned references in `image-list.txt`), and writes `release-info.json` with `sourceDirty=false` plus `release-files.sha256` (added 2026-08-16). The release artifact is assembled at a sibling directory `ieta-znz-deploy-release/` next to the repository checkout.
 - `flink-jobmanager` healthcheck (`/overview`) and Linux `status-app-base.sh` healthy/host-probe checks added (added 2026-08-16)
-- Offline archives: all delivery images live in `images/linux-amd64` and `images/linux-arm64` and are recorded in `scripts/common/image-archives.txt` with the tag stored inside each tar at save time (a few archives carry save-time tags such as `postgres:16`, `valkey/valkey:8`, `onlyoffice/documentserver:latest`). Pinned runtime references remain in `docker-compose.ieta-znz-deploy.yml` and `image-list.txt`; archives are regenerated via `docker save` when a pinned reference changes.
+- Offline archives: all delivery images live in `images/linux-amd64` and `images/linux-arm64` and are produced by `docker save` of the pinned references, so each tar's internal RepoTag equals the Compose pinned tag (`postgres:16.14`, `valkey/valkey:8.1.8`, `onlyoffice/documentserver:9.4.0`, ...). A clean offline environment can `docker load` the archives and `compose up` without manual re-tagging (R10).
 
 Runtime and application-level validation gaps remain recorded in `docs/open-items.md`.
 

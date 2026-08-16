@@ -133,11 +133,13 @@
   - R3：`flink_lib` 卷生命周期文档化，`scripts/ubuntu-{amd64,arm64}/update-flink-lib.sh` 放置 connector，Runner JAR 重建后一致性检查指引；
   - R4：`flink-jobmanager` healthcheck（`/overview`），Linux `status-app-base.sh` 增加 healthy 判定与宿主机端口探测（15432/19200/19081）；
   - R5：`check-release.ps1` 校验 `.env` 与 `project-env/*.host.env` 端口一致；
-  - R6：`publish-release.ps1` 拒绝脏工作区，`release-info.json` 的 `sourceDirty` 恒为 false 并记录 `sourceCommit`；发布物生成在仓库同级 `ieta-znz-deploy-release/`，离线归档按 `scripts/common/image-archives.txt`（归档内 RepoTags 登记）校验；
+  - R6：`publish-release.ps1` 拒绝脏工作区，`release-info.json` 的 `sourceDirty` 恒为 false 并记录 `sourceCommit`；发布物生成在仓库同级 `ieta-znz-deploy-release/`，离线归档按 `scripts/common/image-archives.txt` 校验（存在性 + tar 内 RepoTags + 必须属于固定镜像引用）；
   - R7：`ES7_SECURITY_ENABLED`/`ELASTIC_PASSWORD` 环境变量化，健康检查与宿主机探测感知认证，文档声明无 TLS 边界；
   - R8：可选最小权限脚本与角色分离说明（`ieta_core`/`ieta_cdc_writer`/`ieta_cdc_ops`）；
-  - R9：`BUILD_STATUS.md` 补充 Flink/connector/PG/MySQL/ES7 兼容性声明与验证状态。
-- 验证：静态校验（compose 配置、脚本语法、端口一致性逻辑）通过；运行级验收（`/overview` 槽位随配置变化、内存配置生效、认证切换、连接器加载）由发布方在目标平台执行并记录到 `BUILD_STATUS.md`。
+  - R9：`BUILD_STATUS.md` 补充 Flink/connector/PG/MySQL/ES7 兼容性声明与验证状态；
+  - R10：`images/linux-{amd64,arm64}` 归档按固定引用 `docker save` 重新生成（tar 内 RepoTag == Compose pinned tag），`publish-release.ps1` 拒绝未列入 `image-list.txt` 的归档标签；
+  - R11：README 与运维指南新增"Flink 首次启动必做"清单（connector 放置与 ES7 shaded jar 警告、重启、Runner 上传/核对/rebind、容器重建触发条件），`update-flink-lib.sh` 用法进入 README 主流程。
+- 验证：静态校验（compose 配置、脚本语法、端口一致性逻辑）通过；归档已按固定引用重建并逐项核验（标签/架构）；运行级验收（`/overview` 槽位随配置变化、内存配置生效、认证切换、连接器加载）由发布方在目标平台执行并记录到 `BUILD_STATUS.md`。
 
 ## 当前命名基线
 

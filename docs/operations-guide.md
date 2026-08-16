@@ -135,6 +135,27 @@ docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.
 
 ## 9. Flink 连接器、Runner 与 flink_lib 卷
 
+> **首次启动必做**（CDC Core 场景按此顺序操作，缺一步会导致任务提交失败，
+> 例如 `Could not find any factory for identifier 'postgres-cdc'` 或 `FLINK_RUNNER_JAR_NOT_FOUND`）：
+>
+> 1. **放置 connector jar 到 `flink_lib`**（容器内 `/opt/flink/lib/ieta`）：
+>    - PostgreSQL CDC connector（如 `flink-sql-connector-postgres-cdc-3.6.0.jar`）；
+>    - JDBC connector（如 `flink-connector-jdbc-3.3.0.jar`）；
+>    - JDBC 驱动（如 `postgresql-42.x.jar`，视目标库补充 MySQL 驱动）；
+>    - **警告：不要放置非 SQL shaded 版 `flink-connector-elasticsearch7-*.jar`**，它与 Flink SQL 的工厂加载机制冲突；ES7 写入请使用消费方指定的 SQL 兼容版本。
+>
+>    Linux 用 `scripts/ubuntu-amd64/update-flink-lib.sh <jar>...`（arm64 用 `scripts/ubuntu-arm64/`），
+>    或等价命令：`docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.yml cp <jar> flink-jobmanager:/opt/flink/lib/ieta/`。
+> 2. **重启 Flink**（TaskManager 自动重连）：
+>    `docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.yml restart flink-taskmanager flink-jobmanager`
+> 3. **验证 Flink 就绪**：`curl http://127.0.0.1:19081/overview` 返回正常；按需核对 `slots-total`/`slots-available`。
+> 4. **上传 Runner JAR**（REST `POST /jars/upload` 或 Web UI），记录返回的 jarId；
+>    **核对**：`curl http://127.0.0.1:19081/jars` 包含该 jarId。
+> 5. **创建/绑定数据源并提交 CDC 任务**；若提示 configured jarId 不可用，先重传 Runner 并 rebind 后再提交。
+>
+> **触发条件**：JobManager 容器重建（`up -d --force-recreate`、崩溃自愈、镜像升级、宿主机重启拉起新容器）后，
+> `/jars` 上传目录被清空——必须重新上传 Runner 并 rebind；`flink_lib` 中的 connector 不受影响，无需重放。
+
 `flink_lib` 是 Compose 命名卷，挂载到 `flink-jobmanager` 与全部 `flink-taskmanager` 副本的 `/opt/flink/lib/ieta`。生命周期：
 
 | 操作 | `flink_lib` 是否保留 |
@@ -204,7 +225,7 @@ docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.
 
 - Git 工作区干净（`sourceDirty=false` 是硬性要求，`sourceCommit` 指向可解析的干净提交）；
 - `check-release.ps1` 全部通过（Compose 配置、固定镜像标签、镜像总清单、`.env` 与 `project-env/*.host.env` 端口一致性）；
-- `scripts/common/image-archives.txt` 中列出的 `images/linux-amd64`、`images/linux-arm64` 归档齐全且 tar 内 RepoTags 与清单登记一致。离线镜像归档全部来自本项目 `images/` 目录；运行时固定版本以 `docker-compose.ieta-znz-deploy.yml` 与 `image-list.txt` 为准，归档仅在固定版本变更时用 `docker save` 重新生成。
+- `scripts/common/image-archives.txt` 中列出的 `images/linux-amd64`、`images/linux-arm64` 归档齐全，tar 内 RepoTags 与清单登记一致，**且每个标签必须等于 Compose/`image-list.txt` 的固定镜像引用**。归档按固定引用 `docker save` 生成，干净离线环境 `docker load` 归档后 `compose up` 无需手动 retag。
 
 发布产物 `ieta-znz-deploy-release/` 含 `release-info.json`（`createdAt`、`sourceCommit`、`sourceDirty=false`、`imageDelivery=local-offline-archives-only`）与覆盖全部文件的 `release-files.sha256`。消费方只读依赖该发布物，校验失败时返回本仓库处理并重新发布。
 

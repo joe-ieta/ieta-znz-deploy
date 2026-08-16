@@ -11,6 +11,9 @@ BASE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 if [[ $# -lt 1 ]]; then
   echo "usage: update-flink-lib.sh <jar-file> [jar-file...]" >&2
+  echo "  e.g. flink-sql-connector-postgres-cdc-3.6.0.jar, flink-connector-jdbc-3.3.0.jar, postgresql-42.x.jar" >&2
+  echo "  WARNING: do not place the non-SQL shaded flink-connector-elasticsearch7-*.jar here;" >&2
+  echo "           it conflicts with Flink SQL factory loading." >&2
   exit 1
 fi
 

@@ -123,6 +123,32 @@ bash scripts/ubuntu-arm64/status-app-base.sh ieta-cdc-core
 .\stop-base-env.ps1 -RemoveVolumes
 ```
 
+## Flink 首次启动必做（CDC Core）
+
+Flink 容器不预装 connector，按顺序执行，缺一步会导致任务提交失败（如
+`Could not find any factory for identifier 'postgres-cdc'`、`FLINK_RUNNER_JAR_NOT_FOUND`）：
+
+1. **放置 connector jar 到 `flink_lib`**（容器内 `/opt/flink/lib/ieta`）：PostgreSQL CDC connector（如
+   `flink-sql-connector-postgres-cdc-3.6.0.jar`）、JDBC connector（如 `flink-connector-jdbc-3.3.0.jar`）、
+   JDBC 驱动（如 `postgresql-42.x.jar`）。**不要放非 SQL shaded 版
+   `flink-connector-elasticsearch7-*.jar`**（与 Flink SQL 工厂加载机制冲突）。
+
+   Ubuntu 使用脚本（Windows 用等价 `docker compose cp <jar> flink-jobmanager:/opt/flink/lib/ieta/`）：
+
+   ```bash
+   bash scripts/ubuntu-amd64/update-flink-lib.sh /path/to/flink-sql-connector-postgres-cdc-3.6.0.jar /path/to/flink-connector-jdbc-3.3.0.jar /path/to/postgresql-42.x.jar
+   bash scripts/ubuntu-arm64/update-flink-lib.sh <同上>
+   ```
+
+2. **重启 Flink**：
+   `docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.yml restart flink-taskmanager flink-jobmanager`
+3. **验证**：`curl http://127.0.0.1:19081/overview` 正常返回。
+4. **上传 Runner JAR** 并记录 jarId，核对 `curl http://127.0.0.1:19081/jars` 包含该 jarId，再绑定数据源提交任务。
+5. **JobManager 容器重建后**（`--force-recreate`、崩溃自愈、镜像升级等）`/jars` 会被清空：必须重传 Runner 并
+   rebind；`flink_lib` 中 connector 不受影响。
+
+完整参数（槽位/副本/内存、flink_lib 生命周期、ES7 认证、发布流程）见 `docs/operations-guide.md`。
+
 ## 应用接入原则
 
 当新应用需要外部数据库、缓存、对象存储、搜索、文档服务、流处理或模型服务时，必须遵守：
@@ -167,4 +193,4 @@ networks:
 .\publish-release.ps1        # 干净工作区 + 离线归档校验通过后在仓库同级目录生成 ieta-znz-deploy-release/
 ```
 
-发布物生成在仓库同级的 `ieta-znz-deploy-release/`（如 `E:\CodexDev\ieta-znz-deploy-release`），含 `release-info.json`（`sourceDirty=false`、`sourceCommit` 可解析、`imageDelivery=local-offline-archives-only`）与覆盖全部文件的 `release-files.sha256`。离线镜像归档全部位于本项目 `images/linux-amd64`、`images/linux-arm64`，发布时按 `scripts/common/image-archives.txt` 校验归档存在且 tar 内 RepoTags 与清单登记一致。Flink 槽位/副本/内存、ES7 可选认证等运行参数与运维细节见 `docs/operations-guide.md`。
+发布物生成在仓库同级的 `ieta-znz-deploy-release/`（如 `E:\CodexDev\ieta-znz-deploy-release`），含 `release-info.json`（`sourceDirty=false`、`sourceCommit` 可解析、`imageDelivery=local-offline-archives-only`）与覆盖全部文件的 `release-files.sha256`。离线镜像归档全部位于本项目 `images/linux-amd64`、`images/linux-arm64`，按固定镜像引用 `docker save` 生成（tar 内 RepoTag == Compose pinned tag），发布时校验归档存在且 RepoTag 属于 `image-list.txt` 固定引用，干净离线环境 `docker load` 后 `compose up` 无需手动 retag。Flink 槽位/副本/内存、ES7 可选认证等运行参数与运维细节见 `docs/operations-guide.md`。

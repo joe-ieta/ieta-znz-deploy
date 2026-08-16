@@ -43,11 +43,25 @@ $archiveEntries = @(
     Where-Object { $_ -and -not $_.StartsWith("#") }
 )
 if ($archiveEntries.Count -eq 0) { throw "scripts/common/image-archives.txt has no entries" }
+
+# Every archive RepoTag must be one of the pinned image references (compose/image-list.txt),
+# so a clean offline environment can load archives and `compose up` without manual retag.
+$pinnedListPath = Join-Path $scriptDir "image-list.txt"
+$pinnedImages = @(
+  Get-Content -LiteralPath $pinnedListPath |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ -and -not $_.StartsWith("#") } |
+    Sort-Object -Unique
+)
+
 foreach ($line in $archiveEntries) {
   $parts = $line -split "\s+", 2
   if ($parts.Count -ne 2) { throw "Malformed archive entry: $line" }
   $relPath = $parts[0]
   $expectedTag = $parts[1]
+  if ($expectedTag -notin $pinnedImages) {
+    throw "Archive $relPath lists RepoTag '$expectedTag' which is not a pinned image reference in image-list.txt"
+  }
   $fullPath = Join-Path $scriptDir ($relPath -replace "/", "\")
   if (-not (Test-Path -LiteralPath $fullPath)) { throw "Missing image archive: $relPath" }
   if ((Get-Item -LiteralPath $fullPath).Length -eq 0) { throw "Empty image archive: $relPath" }
