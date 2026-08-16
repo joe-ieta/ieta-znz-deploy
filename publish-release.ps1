@@ -62,7 +62,7 @@ foreach ($line in $archiveEntries) {
 }
 
 Write-Host "Assembling release artifact: $OutDir"
-$outFull = Join-Path $scriptDir $OutDir
+$outFull = [System.IO.Path]::GetFullPath($OutDir)
 if (Test-Path -LiteralPath $outFull) { Remove-Item -Recurse -Force -LiteralPath $outFull }
 New-Item -ItemType Directory -Path $outFull | Out-Null
 
