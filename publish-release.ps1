@@ -1,12 +1,21 @@
 param(
   [string]$DockerExe = "docker",
   [string]$ProjectName = "ieta-znz-deploy",
-  [string]$OutDir = "ieta-znz-deploy-release"
+  [string]$OutDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
+
+# The release artifact is built as a sibling of the repository checkout:
+#   E:\CodexDev\ieta-znz-deploy-release  (i.e. <parent-of-repo>\ieta-znz-deploy-release)
+if (-not $OutDir) {
+  $OutDir = Join-Path (Split-Path -Parent $scriptDir) "ieta-znz-deploy-release"
+}
+if (-not [System.IO.Path]::IsPathRooted($OutDir)) {
+  $OutDir = Join-Path $scriptDir $OutDir
+}
 
 Write-Host "Git cleanliness check (sourceDirty must be false)"
 $porcelain = @(& git status --porcelain 2>$null)
@@ -57,7 +66,7 @@ $outFull = Join-Path $scriptDir $OutDir
 if (Test-Path -LiteralPath $outFull) { Remove-Item -Recurse -Force -LiteralPath $outFull }
 New-Item -ItemType Directory -Path $outFull | Out-Null
 
-$skipNames = @(".git", ".agents", "run", "models", ".gitignore", $OutDir)
+$skipNames = @(".git", ".agents", "run", "models", ".gitignore")
 Get-ChildItem -LiteralPath $scriptDir -Force | Where-Object { $_.Name -notin $skipNames } | ForEach-Object {
   Copy-Item -Recurse -Force -LiteralPath $_.FullName -Destination $outFull
 }

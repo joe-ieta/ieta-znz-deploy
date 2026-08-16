@@ -164,7 +164,7 @@ networks:
 
 ```powershell
 .\check-release.ps1          # Compose、固定镜像、镜像清单、端口一致性检查
-.\publish-release.ps1        # 干净工作区 + 离线归档校验通过后生成 ieta-znz-deploy-release/
+.\publish-release.ps1        # 干净工作区 + 离线归档校验通过后在仓库同级目录生成 ieta-znz-deploy-release/
 ```
 
-发布物含 `release-info.json`（`sourceDirty=false`、`sourceCommit` 可解析、`imageDelivery=local-offline-archives-only`）与 `release-files.sha256`。离线镜像归档按 `scripts/common/image-archives.txt` 校验 tar 内 RepoTags 与固定镜像引用一致。Flink 槽位/副本/内存、ES7 可选认证等运行参数与运维细节见 `docs/operations-guide.md`。
+发布物生成在仓库同级的 `ieta-znz-deploy-release/`（如 `E:\CodexDev\ieta-znz-deploy-release`），含 `release-info.json`（`sourceDirty=false`、`sourceCommit` 可解析、`imageDelivery=local-offline-archives-only`）与覆盖全部文件的 `release-files.sha256`。离线镜像归档全部位于本项目 `images/linux-amd64`、`images/linux-arm64`，发布时按 `scripts/common/image-archives.txt` 校验归档存在且 tar 内 RepoTags 与清单登记一致。Flink 槽位/副本/内存、ES7 可选认证等运行参数与运维细节见 `docs/operations-guide.md`。

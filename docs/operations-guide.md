@@ -200,11 +200,11 @@ docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.
 .\publish-release.ps1 -DockerExe 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
 ```
 
-发布前必须满足（不满足即拒绝发布）：
+发布物生成在仓库同级的 `ieta-znz-deploy-release/`（如 `E:\CodexDev\ieta-znz-deploy-release`），也可用 `-OutDir` 指定其他位置。发布前必须满足（不满足即拒绝发布）：
 
 - Git 工作区干净（`sourceDirty=false` 是硬性要求，`sourceCommit` 指向可解析的干净提交）；
 - `check-release.ps1` 全部通过（Compose 配置、固定镜像标签、镜像总清单、`.env` 与 `project-env/*.host.env` 端口一致性）；
-- `scripts/common/image-archives.txt` 中列出的 `images/linux-amd64`、`images/linux-arm64` 归档存在且 tar 内 RepoTags 与固定镜像引用一致。
+- `scripts/common/image-archives.txt` 中列出的 `images/linux-amd64`、`images/linux-arm64` 归档齐全且 tar 内 RepoTags 与清单登记一致。离线镜像归档全部来自本项目 `images/` 目录；运行时固定版本以 `docker-compose.ieta-znz-deploy.yml` 与 `image-list.txt` 为准，归档仅在固定版本变更时用 `docker save` 重新生成。
 
 发布产物 `ieta-znz-deploy-release/` 含 `release-info.json`（`createdAt`、`sourceCommit`、`sourceDirty=false`、`imageDelivery=local-offline-archives-only`）与覆盖全部文件的 `release-files.sha256`。消费方只读依赖该发布物，校验失败时返回本仓库处理并重新发布。
 

@@ -133,7 +133,7 @@
   - R3：`flink_lib` 卷生命周期文档化，`scripts/ubuntu-{amd64,arm64}/update-flink-lib.sh` 放置 connector，Runner JAR 重建后一致性检查指引；
   - R4：`flink-jobmanager` healthcheck（`/overview`），Linux `status-app-base.sh` 增加 healthy 判定与宿主机端口探测（15432/19200/19081）；
   - R5：`check-release.ps1` 校验 `.env` 与 `project-env/*.host.env` 端口一致；
-  - R6：`publish-release.ps1` 拒绝脏工作区，`release-info.json` 的 `sourceDirty` 恒为 false 并记录 `sourceCommit`；
+  - R6：`publish-release.ps1` 拒绝脏工作区，`release-info.json` 的 `sourceDirty` 恒为 false 并记录 `sourceCommit`；发布物生成在仓库同级 `ieta-znz-deploy-release/`，离线归档按 `scripts/common/image-archives.txt`（归档内 RepoTags 登记）校验；
   - R7：`ES7_SECURITY_ENABLED`/`ELASTIC_PASSWORD` 环境变量化，健康检查与宿主机探测感知认证，文档声明无 TLS 边界；
   - R8：可选最小权限脚本与角色分离说明（`ieta_core`/`ieta_cdc_writer`/`ieta_cdc_ops`）；
   - R9：`BUILD_STATUS.md` 补充 Flink/connector/PG/MySQL/ES7 兼容性声明与验证状态。
