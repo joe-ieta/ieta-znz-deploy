@@ -229,6 +229,8 @@ docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.
 
 发布产物 `ieta-znz-deploy-release/` 含 `release-info.json`（`createdAt`、`sourceCommit`、`sourceDirty=false`、`imageDelivery=local-offline-archives-only`）与覆盖全部文件的 `release-files.sha256`。消费方只读依赖该发布物，校验失败时返回本仓库处理并重新发布。
 
+镜像来源标准记录、归档生成规范（`scripts/windows/regenerate-archives.ps1`）、全部检查点、验证清单与发布物丢失后的重建步骤，见 `docs/release-specification.md`。
+
 ## 13. 常见问题
 
 端口冲突：修改 `.env` 中的宿主机端口，不修改容器内端口或服务名。

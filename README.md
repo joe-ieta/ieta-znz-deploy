@@ -49,6 +49,7 @@ INCLUDE_LLM=1 bash scripts/ubuntu-arm64/pull-images.sh
 | `docs/positioning.md` | 项目定位、职责边界和稳定契约。 |
 | `docs/application-integration-guide.md` | 新应用接入、开发、打包和发布要求。 |
 | `docs/operations-guide.md` | 镜像下载、启动、停止、状态和故障定位。 |
+| `docs/release-specification.md` | 镜像来源标准记录、归档生成规范、发布检查点、验证清单、外部要求追踪与发布物重建 runbook。 |
 | `docs/service-catalog.md` | 能力、Compose 服务、镜像版本和共享契约。 |
 | `docs/open-items.md` | 当前已知问题、优化项和验收目标。 |
 | `PLATFORM_SUPPORT.md` | 各目标平台和镜像引用支持情况。 |
