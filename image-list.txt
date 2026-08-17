@@ -6,3 +6,5 @@ elasticsearch:8.11.3
 docker.elastic.co/elasticsearch/elasticsearch:7.17.29
 flink:1.20.3-scala_2.12-java17
 onlyoffice/documentserver:9.4.0
+ghcr.io/ggml-org/llama.cpp:server-b10015
+vllm/vllm-openai:v0.25.0

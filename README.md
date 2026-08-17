@@ -1,8 +1,8 @@
 # ieta-znz-deploy
 
-`ieta-znz-deploy` 用于维护和发布 IETA 多工程、多应用共享的 Docker 基础容器包。它集中维护 PostgreSQL、MySQL、Elasticsearch、MinIO、Valkey、OnlyOffice、Flink 等公共基础能力，为多个业务应用提供稳定、可复用的离线容器运行底座。
+`ieta-znz-deploy` 是 IETA 产品族共享的第三方基础容器部署工程。它集中维护 PostgreSQL、MySQL、Elasticsearch、MinIO、Valkey、OnlyOffice、Flink、llama.cpp、vLLM 等公共基础能力，为多个业务应用提供稳定、可复用的容器运行底座。
 
-各业务工程的基础能力声明以及对应的启动、停止、状态命令和说明统一在本项目中维护。本项目不包含业务应用镜像、业务数据库迁移或业务进程生命周期管理。
+本项目不是业务应用发布包，不包含业务应用镜像、业务数据库迁移或业务生命周期管理。
 
 项目统一使用：
 
@@ -13,7 +13,7 @@
 ## 项目负责什么
 
 - 选择并固定第三方容器镜像版本；
-- 维护 Windows AMD64（WSL）、Linux AMD64、Linux ARM64 的离线镜像加载和运维脚本；
+- 维护 Windows Docker Desktop、Ubuntu AMD64、Ubuntu ARM64 的镜像拉取和运维脚本；
 - 提供共享网络、稳定服务名、端口、数据卷和健康检查；
 - 通过 `apps/<app-id>.env` 登记业务应用所需基础能力；
 - 提供容器运行和宿主机运行的连接配置模板；
@@ -21,32 +21,26 @@
 
 业务应用发布包只负责自身应用镜像、业务配置、业务迁移和应用启停，不得重复定义或发布本项目已经维护的第三方容器。
 
-## 离线交付与发布
+## 镜像交付方式
 
-所有基础镜像以 tar 归档保存在当前工程的 `images/` 目录。标准运行流程只从本地执行 `docker load`，不从远端仓库拉取镜像；`images/` 不纳入 Git，也不得推送到任何远端项目库。
-
-Windows AMD64：
+仓库只保存固定版本的镜像引用，不保存容器镜像 tar。安装人员通过脚本把所需镜像下载到本机 Docker：
 
 ```powershell
-.\load-images.ps1
+.\pull-images.ps1 -Platform linux/amd64
+.\pull-images.ps1 -Platform linux/amd64 -IncludeLLM
 ```
 
-Linux：
+Ubuntu：
 
 ```bash
-bash scripts/ubuntu-amd64/load-images.sh
-bash scripts/ubuntu-arm64/load-images.sh
+bash scripts/ubuntu-amd64/pull-images.sh
+INCLUDE_LLM=1 bash scripts/ubuntu-amd64/pull-images.sh
+
+bash scripts/ubuntu-arm64/pull-images.sh
+INCLUDE_LLM=1 bash scripts/ubuntu-arm64/pull-images.sh
 ```
 
-Windows 仅支持 AMD64，并通过 WSL 运行 Linux 容器；不支持 Windows ARM。LLM 服务当前未纳入基础包，只有在两个架构的离线镜像准备完整后才能重新接入。
-
-正式运行环境发布到 `E:\CodexDev\ieta-znz-deploy-release`：
-
-```powershell
-.\publish-release.ps1
-```
-
-发布脚本会先执行配置和离线归档校验，再复制完整运行包并生成 `release-info.json` 与 `release-files.sha256`。
+固定版本的总清单位于 `image-list.txt`，按应用/profile 的子清单由拉取脚本使用。版本调整必须先更新 Compose、所有相关清单、服务目录和平台说明，并通过 `check-release.ps1`。
 
 ## 文档入口
 
@@ -54,7 +48,8 @@ Windows 仅支持 AMD64，并通过 WSL 运行 Linux 容器；不支持 Windows 
 | --- | --- |
 | `docs/positioning.md` | 项目定位、职责边界和稳定契约。 |
 | `docs/application-integration-guide.md` | 新应用接入、开发、打包和发布要求。 |
-| `docs/operations-guide.md` | 离线镜像加载、启动、停止、状态和故障定位。 |
+| `docs/operations-guide.md` | 镜像下载、启动、停止、状态和故障定位。 |
+| `docs/release-specification.md` | 镜像来源标准记录、归档生成规范、发布检查点、验证清单、外部要求追踪与发布物重建 runbook。 |
 | `docs/service-catalog.md` | 能力、Compose 服务、镜像版本和共享契约。 |
 | `docs/open-items.md` | 当前已知问题、优化项和验收目标。 |
 | `PLATFORM_SUPPORT.md` | 各目标平台和镜像引用支持情况。 |
@@ -66,26 +61,27 @@ Windows 仅支持 AMD64，并通过 WSL 运行 Linux 容器；不支持 Windows 
 ieta-znz-deploy/
   apps/                         # 应用到基础能力的声明清单
   docs/                         # 定位、接入、运维和待办文档
-  init/                         # 基础数据库首次初始化脚本
+  init/                         # 基础数据库首次初始化脚本（optional/ 为可选脚本，不自动执行）
   models/                       # 可选本地模型文件，不纳入 Git
   project-env/                  # 应用连接基础环境的环境变量模板
-  scripts/common/               # 能力到服务的公共清单
+  scripts/common/               # 能力到服务的公共清单、离线镜像归档清单
   scripts/windows/              # Windows 运维脚本
   scripts/ubuntu-amd64/         # Ubuntu AMD64 运维脚本
   scripts/ubuntu-arm64/         # Ubuntu ARM64 运维脚本
-  images/                       # 本地离线镜像归档，不纳入 Git
   image-list*.txt               # 固定版本镜像引用
   docker-compose.ieta-znz-deploy.yml
   .env
+  check-release.ps1             # 发布前配置一致性检查
+  publish-release.ps1           # 发布物组装（拒绝脏工作区，生成 release-info.json / release-files.sha256）
 ```
 
 ## 快速使用
 
-Windows AMD64（WSL）：
+Windows：
 
 ```powershell
-cd E:\CodexDev\ieta-znz-deploy-release
-.\load-images.ps1 -DockerExe 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
+cd E:\CodexDev\ieta-znz-deploy
+.\pull-images.ps1 -Platform linux/amd64 -DockerExe 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
 .\start-app-base.ps1 -App ieta-cdc-core -DockerExe 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
 .\status-app-base.ps1 -App ieta-cdc-core -DockerExe 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
 ```
@@ -94,7 +90,7 @@ Ubuntu AMD64：
 
 ```bash
 cd /opt/ieta-znz-deploy
-bash scripts/ubuntu-amd64/load-images.sh
+bash scripts/ubuntu-amd64/pull-images.sh
 bash scripts/ubuntu-amd64/start-app-base.sh ieta-cdc-core
 bash scripts/ubuntu-amd64/status-app-base.sh ieta-cdc-core
 ```
@@ -103,7 +99,7 @@ Ubuntu ARM64：
 
 ```bash
 cd /opt/ieta-znz-deploy
-bash scripts/ubuntu-arm64/load-images.sh
+bash scripts/ubuntu-arm64/pull-images.sh
 bash scripts/ubuntu-arm64/start-app-base.sh ieta-cdc-core
 bash scripts/ubuntu-arm64/status-app-base.sh ieta-cdc-core
 ```
@@ -127,6 +123,32 @@ bash scripts/ubuntu-arm64/status-app-base.sh ieta-cdc-core
 ```powershell
 .\stop-base-env.ps1 -RemoveVolumes
 ```
+
+## Flink 首次启动必做（CDC Core）
+
+Flink 容器不预装 connector，按顺序执行，缺一步会导致任务提交失败（如
+`Could not find any factory for identifier 'postgres-cdc'`、`FLINK_RUNNER_JAR_NOT_FOUND`）：
+
+1. **放置 connector jar 到 `flink_lib`**（容器内 `/opt/flink/lib/ieta`）：PostgreSQL CDC connector（如
+   `flink-sql-connector-postgres-cdc-3.6.0.jar`）、JDBC connector（如 `flink-connector-jdbc-3.3.0.jar`）、
+   JDBC 驱动（如 `postgresql-42.x.jar`）。**不要放非 SQL shaded 版
+   `flink-connector-elasticsearch7-*.jar`**（与 Flink SQL 工厂加载机制冲突）。
+
+   Ubuntu 使用脚本（Windows 用等价 `docker compose cp <jar> flink-jobmanager:/opt/flink/lib/ieta/`）：
+
+   ```bash
+   bash scripts/ubuntu-amd64/update-flink-lib.sh /path/to/flink-sql-connector-postgres-cdc-3.6.0.jar /path/to/flink-connector-jdbc-3.3.0.jar /path/to/postgresql-42.x.jar
+   bash scripts/ubuntu-arm64/update-flink-lib.sh <同上>
+   ```
+
+2. **重启 Flink**：
+   `docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.yml restart flink-taskmanager flink-jobmanager`
+3. **验证**：`curl http://127.0.0.1:19081/overview` 正常返回。
+4. **上传 Runner JAR** 并记录 jarId，核对 `curl http://127.0.0.1:19081/jars` 包含该 jarId，再绑定数据源提交任务。
+5. **JobManager 容器重建后**（`--force-recreate`、崩溃自愈、镜像升级等）`/jars` 会被清空：必须重传 Runner 并
+   rebind；`flink_lib` 中 connector 不受影响。
+
+完整参数（槽位/副本/内存、flink_lib 生命周期、ES7 认证、发布流程）见 `docs/operations-guide.md`。
 
 ## 应用接入原则
 
@@ -164,3 +186,12 @@ networks:
 ```
 
 容器间使用稳定服务名访问基础能力，例如 `postgres:5432`、`mysql8:3306`、`minio:9000`、`valkey:6379`。宿主机端口只用于开发和运维，不是容器间契约。
+
+## 发布
+
+```powershell
+.\check-release.ps1          # Compose、固定镜像、镜像清单、端口一致性检查
+.\publish-release.ps1        # 干净工作区 + 离线归档校验通过后在仓库同级目录生成 ieta-znz-deploy-release/
+```
+
+发布物生成在仓库同级的 `ieta-znz-deploy-release/`（如 `E:\CodexDev\ieta-znz-deploy-release`），含 `release-info.json`（`sourceDirty=false`、`sourceCommit` 可解析、`imageDelivery=local-offline-archives-only`）与覆盖全部文件的 `release-files.sha256`。离线镜像归档全部位于本项目 `images/linux-amd64`、`images/linux-arm64`，按固定镜像引用 `docker save` 生成（tar 内 RepoTag == Compose pinned tag），发布时校验归档存在且 RepoTag 属于 `image-list.txt` 固定引用，干净离线环境 `docker load` 后 `compose up` 无需手动 retag。Flink 槽位/副本/内存、ES7 可选认证等运行参数与运维细节见 `docs/operations-guide.md`。

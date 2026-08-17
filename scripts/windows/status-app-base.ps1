@@ -56,7 +56,8 @@ if ($appValues.ContainsKey("HOST_PROBES")) {
     $parts = $probe.Split(":")
     $portVar = $parts[0]
     $proto = if ($parts.Count -gt 1) { $parts[1] } else { "" }
-    $path = if ($parts.Count -gt 2) { "/" + (($parts[2..($parts.Count - 1)]) -join ":") } else { "" }
+    $pathSuffix = if ($parts.Count -gt 2) { ($parts[2..($parts.Count - 1)]) -join ":" } else { "" }
+    $path = if (-not $pathSuffix) { "" } elseif ($pathSuffix.StartsWith("/")) { $pathSuffix } else { "/" + $pathSuffix }
     $envPortValue = [Environment]::GetEnvironmentVariable($portVar)
     $port = if (-not [string]::IsNullOrEmpty($envPortValue)) { $envPortValue } elseif ($envValues.ContainsKey($portVar)) { $envValues[$portVar] } else { "" }
     if ($port -notmatch '^\d+$') {

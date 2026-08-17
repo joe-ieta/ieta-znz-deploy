@@ -33,7 +33,6 @@ CONTAINER_NETWORK=ieta-znz-deploy
 HOST_ENV_TEMPLATE=project-env/my-app.host.env
 CONTAINER_ENV_TEMPLATE=project-env/my-app.env
 HOST_PROBES=POSTGRES_PORT:tcp,MINIO_PORT:http:/
-HOST_PORT_MAP=POSTGRES_PORT=POSTGRES_PORT,MINIO_PORT=MINIO_ENDPOINT
 NOTES=说明用途、数据隔离方式和特殊依赖
 ```
 
@@ -41,10 +40,10 @@ NOTES=说明用途、数据隔离方式和特殊依赖
 
 - `CAPABILITIES` 只能使用能力目录中存在的 id；
 - `REQUIRED_SERVICES` 必须与 Compose 的实际服务名一致；
-- `HOST_PROBES`（可选，推荐）声明状态检查的宿主机端口探测：`<.env端口变量>:<tcp|http>[/路径]`，端口值从 `.env` 读取，不得硬编码；
-- `HOST_PORT_MAP`（可选，宿主机运行应用时推荐）声明 `.env` 端口变量与宿主机模板键的对应关系，发布校验保证两边端口一致，避免修改 `.env` 端口后模板漂移；
+- `HOST_PROBES`（可选，推荐）声明状态检查的宿主机端口探测：`<.env端口变量>:<tcp|http>[/路径][:用户]`，端口值从 `.env` 读取，不得硬编码；
 - 没有外部依赖时保留清单并明确说明，不伪造 capability；
-- 新增 capability 时同步更新 Compose、能力目录、服务目录、平台支持和构建状态。
+- 新增 capability 时同步更新 Compose、能力目录、服务目录、平台支持和构建状态；
+- 宿主机连接模板的端口必须与 `.env` 一致，`check-release.ps1` 会校验 `project-env/*.host.env` 与 `.env` 的端口一致性。
 
 ### 3.2 提供两类连接模板
 

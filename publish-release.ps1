@@ -1,96 +1,111 @@
 param(
-  [string]$Destination = "E:\CodexDev\ieta-znz-deploy-release",
-  [string]$DockerExe = "docker"
+  [string]$DockerExe = "docker",
+  [string]$ProjectName = "ieta-znz-deploy",
+  [string]$OutDir = ""
 )
 
 $ErrorActionPreference = "Stop"
-$sourceRoot = [IO.Path]::GetFullPath((Split-Path -Parent $MyInvocation.MyCommand.Path)).TrimEnd("\")
-$destinationRoot = [IO.Path]::GetFullPath($Destination).TrimEnd("\")
-$destinationParent = Split-Path -Parent $destinationRoot
-$destinationName = Split-Path -Leaf $destinationRoot
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $scriptDir
 
-if ($destinationRoot -eq $sourceRoot -or $destinationRoot.StartsWith($sourceRoot + "\", [StringComparison]::OrdinalIgnoreCase)) {
-  throw "Release destination must be outside the source project: $destinationRoot"
+# The release artifact is built as a sibling of the repository checkout:
+#   E:\CodexDev\ieta-znz-deploy-release  (i.e. <parent-of-repo>\ieta-znz-deploy-release)
+if (-not $OutDir) {
+  $OutDir = Join-Path (Split-Path -Parent $scriptDir) "ieta-znz-deploy-release"
 }
-if (Test-Path -LiteralPath $destinationRoot) {
-  throw "Release destination already exists. Archive or remove it before publishing: $destinationRoot"
-}
-if (-not (Test-Path -LiteralPath $destinationParent)) {
-  throw "Release destination parent does not exist: $destinationParent"
+if (-not [System.IO.Path]::IsPathRooted($OutDir)) {
+  $OutDir = Join-Path $scriptDir $OutDir
 }
 
-$safeSourceRoot = $sourceRoot.Replace('\', '/')
-$commit = (& git -c "safe.directory=$safeSourceRoot" -C $sourceRoot rev-parse HEAD 2>$null)
-if (-not $commit) { throw "Source is not a git repository; releases must map to a clean commit: $sourceRoot" }
-$gitStatus = @(& git -c "safe.directory=$safeSourceRoot" -C $sourceRoot status --porcelain 2>$null)
-if ($gitStatus.Count -gt 0) {
-  Write-Host "Working tree is not clean. Releases must map to a clean commit (sourceDirty=false)." -ForegroundColor Yellow
-  $gitStatus | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-  throw "Refusing to publish from a dirty working tree. Commit or stash all changes first."
+Write-Host "Git cleanliness check (sourceDirty must be false)"
+$porcelain = @(& git status --porcelain 2>$null)
+if ($LASTEXITCODE -ne 0) { throw "git status failed; publishing requires a Git worktree" }
+if ($porcelain.Count -gt 0) {
+  Write-Host "Working tree is not clean:" -ForegroundColor Red
+  $porcelain | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+  throw "Publish refused: commit or stash all changes first so release-info.json can record a clean sourceCommit."
 }
 
-Write-Host "Running release checks."
-& (Join-Path $sourceRoot "check-release.ps1") -DockerExe $DockerExe
-if ($LASTEXITCODE -ne 0) { throw "Release checks failed." }
+$commit = (& git rev-parse HEAD).Trim()
+if (-not $commit) { throw "Cannot resolve HEAD commit" }
+Write-Host "sourceCommit: $commit"
 
-$sourceFiles = @(
-  Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Force |
-    Where-Object {
-      $_.FullName -notlike "$sourceRoot\.git\*" -and
-      $_.FullName -notlike "$sourceRoot\.agents\*" -and
-      $_.Name -notlike "*.log"
-    }
+Write-Host "Release configuration check"
+& (Join-Path $scriptDir "check-release.ps1") -DockerExe $DockerExe -ProjectName $ProjectName
+if ($LASTEXITCODE -ne 0) { throw "check-release.ps1 failed" }
+
+Write-Host "Offline image archive check"
+$archivesList = Join-Path $scriptDir "scripts\common\image-archives.txt"
+if (-not (Test-Path -LiteralPath $archivesList)) { throw "scripts/common/image-archives.txt missing" }
+$archiveEntries = @(
+  Get-Content -LiteralPath $archivesList |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ -and -not $_.StartsWith("#") }
 )
-$sourceBytes = ($sourceFiles | Measure-Object -Property Length -Sum).Sum
-$driveRoot = [IO.Path]::GetPathRoot($destinationRoot)
-$freeBytes = (Get-PSDrive -Name $driveRoot.Substring(0, 1)).Free
-if ($freeBytes -lt ($sourceBytes + 1GB)) {
-  throw "Insufficient free space. Required: $([math]::Round(($sourceBytes + 1GB) / 1GB, 2)) GB; available: $([math]::Round($freeBytes / 1GB, 2)) GB."
-}
+if ($archiveEntries.Count -eq 0) { throw "scripts/common/image-archives.txt has no entries" }
 
-$stagingRoot = Join-Path $destinationParent (".$destinationName.staging-$PID")
-if (Test-Path -LiteralPath $stagingRoot) {
-  throw "Staging destination already exists: $stagingRoot"
-}
+# Every archive RepoTag must be one of the pinned image references (compose/image-list.txt),
+# so a clean offline environment can load archives and `compose up` without manual retag.
+$pinnedListPath = Join-Path $scriptDir "image-list.txt"
+$pinnedImages = @(
+  Get-Content -LiteralPath $pinnedListPath |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ -and -not $_.StartsWith("#") } |
+    Sort-Object -Unique
+)
 
-try {
-  Write-Host "Copying offline runtime package to staging directory."
-  New-Item -ItemType Directory -Path $stagingRoot | Out-Null
-  & robocopy $sourceRoot $stagingRoot /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /XD .git .agents /XF *.log /NFL /NDL /NJH /NJS /NP
-  if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE" }
-
-  $releaseInfo = [ordered]@{
-    project = "ieta-znz-deploy"
-    purpose = "multi-application shared offline Docker base runtime"
-    createdAt = (Get-Date).ToString("o")
-    sourceCommit = $commit.Trim()
-    sourceDirty = $false
-    platforms = @("windows-amd64-via-wsl", "linux-amd64", "linux-arm64")
-    imageDelivery = "local-offline-archives-only"
+foreach ($line in $archiveEntries) {
+  $parts = $line -split "\s+", 2
+  if ($parts.Count -ne 2) { throw "Malformed archive entry: $line" }
+  $relPath = $parts[0]
+  $expectedTag = $parts[1]
+  if ($expectedTag -notin $pinnedImages) {
+    throw "Archive $relPath lists RepoTag '$expectedTag' which is not a pinned image reference in image-list.txt"
   }
-  $releaseInfo | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stagingRoot "release-info.json") -Encoding utf8
-
-  Write-Host "Generating SHA-256 file manifest."
-  $hashLines = Get-ChildItem -LiteralPath $stagingRoot -Recurse -File -Force |
-    Where-Object { $_.Name -ne "release-files.sha256" } |
-    Sort-Object FullName |
-    ForEach-Object {
-      $relativePath = $_.FullName.Substring($stagingRoot.Length + 1).Replace("\", "/")
-      $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-      "$hash  $relativePath"
-    }
-  $hashLines | Set-Content -LiteralPath (Join-Path $stagingRoot "release-files.sha256") -Encoding ascii
-
-  Rename-Item -LiteralPath $stagingRoot -NewName $destinationName
-  $stagingRoot = $null
-} finally {
-  if ($stagingRoot -and (Test-Path -LiteralPath $stagingRoot)) {
-    Write-Warning "Incomplete staging directory retained for inspection: $stagingRoot"
+  $fullPath = Join-Path $scriptDir ($relPath -replace "/", "\")
+  if (-not (Test-Path -LiteralPath $fullPath)) { throw "Missing image archive: $relPath" }
+  if ((Get-Item -LiteralPath $fullPath).Length -eq 0) { throw "Empty image archive: $relPath" }
+  $manifestJson = & tar -xOf $fullPath manifest.json 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $manifestJson) { throw "Cannot read manifest.json from archive: $relPath" }
+  $manifest = $manifestJson | ConvertFrom-Json
+  $repoTags = @($manifest.RepoTags)
+  if ($repoTags -notcontains $expectedTag) {
+    throw "Archive $relPath contains RepoTags [$($repoTags -join ', ')], expected $expectedTag"
   }
+  Write-Host "  $relPath -> $expectedTag"
 }
 
-$releaseFiles = Get-ChildItem -LiteralPath $destinationRoot -Recurse -File -Force
-$releaseBytes = ($releaseFiles | Measure-Object -Property Length -Sum).Sum
-Write-Host "Release published: $destinationRoot"
-Write-Host "Files: $($releaseFiles.Count)"
-Write-Host "Size: $([math]::Round($releaseBytes / 1GB, 2)) GB"
+Write-Host "Assembling release artifact: $OutDir"
+$outFull = [System.IO.Path]::GetFullPath($OutDir)
+if (Test-Path -LiteralPath $outFull) { Remove-Item -Recurse -Force -LiteralPath $outFull }
+New-Item -ItemType Directory -Path $outFull | Out-Null
+
+$skipNames = @(".git", ".agents", "run", "models", ".gitignore")
+Get-ChildItem -LiteralPath $scriptDir -Force | Where-Object { $_.Name -notin $skipNames } | ForEach-Object {
+  Copy-Item -Recurse -Force -LiteralPath $_.FullName -Destination $outFull
+}
+
+$createdAt = Get-Date -Format "yyyy-MM-dd"
+$releaseInfo = [ordered]@{
+  releaseName = "ieta-znz-deploy-release"
+  createdAt = $createdAt
+  sourceCommit = $commit
+  sourceDirty = $false
+  imageDelivery = "local-offline-archives-only"
+  filesHashList = "release-files.sha256"
+}
+$releaseInfo | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $outFull "release-info.json")
+
+Write-Host "Generating release-files.sha256"
+$hashLines = @()
+Get-ChildItem -LiteralPath $outFull -Recurse -File | Sort-Object { $_.FullName } | ForEach-Object {
+  if ($_.Name -eq "release-files.sha256") { return }
+  $rel = $_.FullName.Substring($outFull.Length).TrimStart("\", "/").Replace("\", "/")
+  $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLower()
+  $hashLines += "$hash  $rel"
+}
+Set-Content -Encoding ASCII -LiteralPath (Join-Path $outFull "release-files.sha256") -Value $hashLines
+
+Write-Host "Release artifact written to $OutDir"
+Write-Host "release-info.json: $($releaseInfo | ConvertTo-Json -Compress)"
+Write-Host "release-files.sha256: $($hashLines.Count) entries"
