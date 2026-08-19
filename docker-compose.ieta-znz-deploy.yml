@@ -145,15 +145,34 @@ services:
   flink-jobmanager:
     image: flink:1.20.3-scala_2.12-java17
     profiles: ["flink", "cdc"]
-    command: jobmanager
+    entrypoint: ["/bin/sh", "-c", "chown -R flink:flink /opt/flink/checkpoints /opt/flink/savepoints && exec /docker-entrypoint.sh jobmanager"]
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         jobmanager.memory.process.size: ${FLINK_JM_MEM:-1600m}
+        jobmanager.memory.jvm-metaspace.size: ${FLINK_JM_METASPACE:-1g}
+        execution.checkpointing.storage: filesystem
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        state.savepoints.dir: file:///opt/flink/savepoints
+        execution.checkpointing.interval: ${FLINK_CK_INTERVAL:-60s}
+        execution.checkpointing.min-pause: 30s
+        execution.checkpointing.timeout: 10min
+        execution.checkpointing.max-concurrent-checkpoints: 1
+        execution.checkpointing.tolerable-failed-checkpoints: 3
+        execution.checkpointing.num-retained: 3
+        execution.checkpointing.mode: EXACTLY_ONCE
+        restart-strategy.type: exponential-delay
+        restart-strategy.exponential-delay.initial-backoff: 10s
+        restart-strategy.exponential-delay.max-backoff: 2min
+        restart-strategy.exponential-delay.backoff-multiplier: 2.0
+        restart-strategy.exponential-delay.jitter-factor: 0.2
+        restart-strategy.exponential-delay.reset-backoff-threshold: 1h
     ports:
       - ${FLINK_REST_PORT}:8081
     volumes:
       - flink_lib:/opt/flink/lib/ieta
+      - flink_checkpoints:/opt/flink/checkpoints
+      - flink_checkpoints:/opt/flink/savepoints
     networks:
       - ieta-znz-deploy
     healthcheck:
@@ -167,18 +186,36 @@ services:
   flink-taskmanager:
     image: flink:1.20.3-scala_2.12-java17
     profiles: ["flink", "cdc"]
-    command: taskmanager
+    entrypoint: ["/bin/sh", "-c", "chown -R flink:flink /opt/flink/checkpoints /opt/flink/savepoints && exec /docker-entrypoint.sh taskmanager"]
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-21}
         taskmanager.memory.process.size: ${FLINK_TM_MEM:-4g}
+        execution.checkpointing.storage: filesystem
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        state.savepoints.dir: file:///opt/flink/savepoints
+        execution.checkpointing.interval: ${FLINK_CK_INTERVAL:-60s}
+        execution.checkpointing.min-pause: 30s
+        execution.checkpointing.timeout: 10min
+        execution.checkpointing.max-concurrent-checkpoints: 1
+        execution.checkpointing.tolerable-failed-checkpoints: 3
+        execution.checkpointing.num-retained: 3
+        execution.checkpointing.mode: EXACTLY_ONCE
+        restart-strategy.type: exponential-delay
+        restart-strategy.exponential-delay.initial-backoff: 10s
+        restart-strategy.exponential-delay.max-backoff: 2min
+        restart-strategy.exponential-delay.backoff-multiplier: 2.0
+        restart-strategy.exponential-delay.jitter-factor: 0.2
+        restart-strategy.exponential-delay.reset-backoff-threshold: 1h
     deploy:
       replicas: ${FLINK_TM_REPLICAS:-3}
     depends_on:
       - flink-jobmanager
     volumes:
       - flink_lib:/opt/flink/lib/ieta
+      - flink_checkpoints:/opt/flink/checkpoints
+      - flink_checkpoints:/opt/flink/savepoints
     networks:
       - ieta-znz-deploy
     restart: unless-stopped
@@ -232,6 +269,7 @@ volumes:
   es8_ragflow_data:
   es7_cdc_data:
   flink_lib:
+  flink_checkpoints:
   onlyoffice_data:
   onlyoffice_log:
   onlyoffice_lib:

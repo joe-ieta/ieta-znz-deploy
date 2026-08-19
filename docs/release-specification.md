@@ -163,6 +163,7 @@ Get-Content <发布物>\release-files.sha256 | % { ... }   # 逐项重算 SHA-25
 | --- | --- | --- | --- | --- |
 | R1 | P0 | Flink 槽位参数化（≥21）+ 3 TM 副本默认 + 总槽位声明 | `.env`（`FLINK_TASK_SLOTS=21`/`FLINK_TM_REPLICAS=3`）、compose `deploy.replicas`、`apps/ieta-cdc-core.env`（`FLINK_TOTAL_SLOTS`） | 已实现 |
 | R2 | P1 | JM/TM 内存参数化 | `.env`（`FLINK_JM_MEM`/`FLINK_TM_MEM`）、compose `FLINK_PROPERTIES` | 已实现 |
+| R2-EXT | P0 | JM Metaspace 参数化（默认 ≥512m）与 checkpoint/restart 默认配置（键与 Green 安装器基线一致） | `.env`（`FLINK_JM_METASPACE=1g`/`FLINK_CK_INTERVAL=60s`）、compose `FLINK_PROPERTIES`、`flink_checkpoints` 命名卷 + 入口 chown、运维指南 §8 | 已实现 |
 | R3 | P1 | flink_lib 生命周期 + connector 放置脚本 + Runner 一致性检查 | `docs/operations-guide.md` §9、`scripts/ubuntu-{amd64,arm64}/update-flink-lib.sh` | 已实现 |
 | R4 | P1 | Flink healthcheck + 宿主机连通性检查 | compose `flink-jobmanager.healthcheck`、Linux `status-app-base.sh`（healthy + `HOST_PROBES`） | 已实现 |
 | R5 | P1 | host.env 与 .env 端口一致性校验 | `check-release.ps1` A4 | 已实现 |

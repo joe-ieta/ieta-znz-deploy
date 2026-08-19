@@ -130,6 +130,7 @@
 - 实现：
   - R1：`FLINK_TASK_SLOTS=21`（不低于 21）、`FLINK_TM_REPLICAS=3` 默认 3 个 TaskManager 副本，`apps/ieta-cdc-core.env` 声明 `FLINK_TOTAL_SLOTS=63`；
   - R2：`FLINK_JM_MEM`/`FLINK_TM_MEM` 注入 `FLINK_PROPERTIES`；
+  - R2-EXT：`FLINK_JM_METASPACE=1g`（≥512m）参数化；checkpoint/restart 默认配置（`state.checkpoints.dir`、`execution.checkpointing.*`、`restart-strategy.type=exponential-delay` 及 backoff 参数，键与 Green 安装器基线一致）；`flink_checkpoints` 命名卷 + 入口 `chown` 保证 flink 用户可写；运维指南记录卷生命周期与恢复行为；
   - R3：`flink_lib` 卷生命周期文档化，`scripts/ubuntu-{amd64,arm64}/update-flink-lib.sh` 放置 connector，Runner JAR 重建后一致性检查指引；
   - R4：`flink-jobmanager` healthcheck（`/overview`），Linux `status-app-base.sh` 增加 healthy 判定与宿主机端口探测（15432/19200/19081）；
   - R5：`check-release.ps1` 校验 `.env` 与 `project-env/*.host.env` 端口一致；

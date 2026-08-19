@@ -122,6 +122,8 @@ docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.
 | `FLINK_TM_REPLICAS` | `3` | TaskManager 副本数。默认 3 与 CDC Core Green 安装器对齐，避免单 TaskManager 故障导致其上全部作业同时失败。 |
 | `FLINK_JM_MEM` | `1600m` | `jobmanager.memory.process.size`。 |
 | `FLINK_TM_MEM` | `4g` | `taskmanager.memory.process.size`。每 TaskManager 20 槽约需 3~5GB，默认 21 槽配 4g。 |
+| `FLINK_JM_METASPACE` | `1g` | `jobmanager.memory.jvm-metaspace.size`。application-mode 每提交一个 CDC job 新建类加载器，按 **每 job 2~4MB** 预算（40 个并发 job 实测需 1g，默认 96MB 约 25 个 job 即 OOM）。默认值不低于 512m（R2-EXT）。 |
+| `FLINK_CK_INTERVAL` | `60s` | `execution.checkpointing.interval`，与 CDC Core Green 安装器基线一致。 |
 
 总槽位 = `FLINK_TASK_SLOTS` × `FLINK_TM_REPLICAS`（默认 63），在 `apps/ieta-cdc-core.env` 的 `FLINK_TOTAL_SLOTS` 与 `project-env/ieta-cdc-core.host.env` 注释中声明，供消费方核对容量门禁。修改槽位或副本数后 `docker compose up -d`，用 `curl http://127.0.0.1:19081/overview` 核对 `slots-total` / `slots-available`。
 
@@ -132,6 +134,40 @@ docker compose --project-name ieta-znz-deploy -f docker-compose.ieta-znz-deploy.
 3. 或使用 `docker-compose.override.yml` 覆盖 `deploy.replicas`。
 
 资源受限的小型环境可显式设置 `FLINK_TM_REPLICAS=1`。注意故障域影响：单 TaskManager 故障（容器退出、宿主机资源耗尽）会使该 TM 上的全部 CDC 作业同时失败，仅建议在开发或明确接受该风险的场景使用。
+
+### Checkpoint 与重启策略（R2-EXT）
+
+JM 与 TM 的 `FLINK_PROPERTIES` 内置以下默认配置，键与 CDC Core Green 安装器基线一致：
+
+| 配置键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `state.checkpoints.dir` | `file:///opt/flink/checkpoints` | checkpoint 目录（`flink_checkpoints` 命名卷，见生命周期表） |
+| `state.savepoints.dir` | `file:///opt/flink/savepoints` | savepoint 目录（同一卷） |
+| `execution.checkpointing.storage` | `filesystem` | 文件系统状态存储 |
+| `execution.checkpointing.interval` | `60s`（`FLINK_CK_INTERVAL`） | 自动 checkpoint 间隔 |
+| `execution.checkpointing.min-pause` | `30s` | 两次 checkpoint 最小间隔 |
+| `execution.checkpointing.timeout` | `10min` | 单次 checkpoint 超时 |
+| `execution.checkpointing.max-concurrent-checkpoints` | `1` | 最大并发 checkpoint |
+| `execution.checkpointing.tolerable-failed-checkpoints` | `3` | 容忍的连续失败次数 |
+| `execution.checkpointing.num-retained` | `3` | 完成作业保留的 checkpoint 数 |
+| `execution.checkpointing.mode` | `EXACTLY_ONCE` | 语义级别 |
+| `restart-strategy.type` | `exponential-delay` | 重启策略 |
+| `restart-strategy.exponential-delay.initial-backoff` | `10s` | 初始退避 |
+| `restart-strategy.exponential-delay.max-backoff` | `2min` | 最大退避 |
+| `restart-strategy.exponential-delay.backoff-multiplier` | `2.0` | 退避倍增 |
+| `restart-strategy.exponential-delay.jitter-factor` | `0.2` | 抖动因子 |
+| `restart-strategy.exponential-delay.reset-backoff-threshold` | `1h` | 稳定运行后重置退避阈值 |
+
+`flink_checkpoints` 卷生命周期（与 `flink_lib` 相同规律）：
+
+| 操作 | checkpoint 目录是否保留 |
+| --- | --- |
+| 容器 restart / 崩溃自愈 / 镜像升级重建 | 保留（运行中 job 凭 checkpoint 自动恢复，不依赖手动 savepoint） |
+| `docker compose stop` / `down`（不带 `-v`） | 保留 |
+| `docker compose down -v` / `stop-base-env.ps1 -RemoveVolumes` | **丢失**（所有 checkpoint/savepoint 一并删除） |
+| 需要跨 `down -v` 持久化 | 另行挂载独立数据卷并相应修改 `state.checkpoints.dir` / `state.savepoints.dir` |
+
+容器以 `flink` 用户运行，入口脚本在启动时对 checkpoint/savepoint 目录执行 `chown` 保证可写。
 
 ## 9. Flink 连接器、Runner 与 flink_lib 卷
 
