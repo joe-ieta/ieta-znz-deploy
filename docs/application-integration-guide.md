@@ -2,7 +2,7 @@
 
 ## 1. 适用范围
 
-当业务应用需要 PostgreSQL、MySQL、Elasticsearch、MinIO、Valkey、OnlyOffice、Flink、llama.cpp、vLLM 或其他外部容器时，应优先接入 `ieta-znz-deploy`。
+当业务应用需要 PostgreSQL、MySQL、Elasticsearch、MinIO、Valkey、OnlyOffice、Flink 或其他外部容器时，应优先接入 `ieta-znz-deploy`。
 
 代码、文档、安装目录、发布说明、Docker Compose 项目名和共享网络统一使用 `ieta-znz-deploy`。
 
@@ -32,6 +32,7 @@ REQUIRED_SERVICES=postgres,minio,valkey
 CONTAINER_NETWORK=ieta-znz-deploy
 HOST_ENV_TEMPLATE=project-env/my-app.host.env
 CONTAINER_ENV_TEMPLATE=project-env/my-app.env
+HOST_PROBES=POSTGRES_PORT:tcp,MINIO_PORT:http:/
 NOTES=说明用途、数据隔离方式和特殊依赖
 ```
 
@@ -39,8 +40,10 @@ NOTES=说明用途、数据隔离方式和特殊依赖
 
 - `CAPABILITIES` 只能使用能力目录中存在的 id；
 - `REQUIRED_SERVICES` 必须与 Compose 的实际服务名一致；
+- `HOST_PROBES`（可选，推荐）声明状态检查的宿主机端口探测：`<.env端口变量>:<tcp|http>[/路径][:用户]`，端口值从 `.env` 读取，不得硬编码；
 - 没有外部依赖时保留清单并明确说明，不伪造 capability；
-- 新增 capability 时同步更新 Compose、能力目录、服务目录、平台支持和构建状态。
+- 新增 capability 时同步更新 Compose、能力目录、服务目录、平台支持和构建状态；
+- 宿主机连接模板的端口必须与 `.env` 一致，`check-release.ps1` 会校验 `project-env/*.host.env` 与 `.env` 的端口一致性。
 
 ### 3.2 提供两类连接模板
 
@@ -125,7 +128,7 @@ networks:
 - 真实生产凭据；
 - 仅在开发机成立的固定绝对路径。
 
-业务应用和 `ieta-znz-deploy` 必须保持为两个边界清晰、可独立升级的发布单元。安装时先通过本项目脚本拉取固定版本镜像，再启动业务应用所需 capability。
+业务应用和 `ieta-znz-deploy` 必须保持为两个边界清晰、可独立升级的发布单元。安装时先通过本项目脚本加载发布包内的离线固定版本镜像，再启动业务应用所需 capability；安装过程不得访问远端镜像仓库。
 
 ## 5. 新增或升级基础能力的发布要求
 
@@ -134,10 +137,10 @@ networks:
 1. 更新 `docker-compose.ieta-znz-deploy.yml` 和 `scripts/common/service-catalog.env`。
 2. 更新 `docs/service-catalog.md`，说明版本、用途、兼容边界和迁移影响。
 3. 在 `image-list.txt` 和对应 profile 清单中登记固定版本引用，禁止使用 `latest`、仅主版本或其他浮动标签。
-4. 验证镜像 registry manifest 的 AMD64/ARM64 支持并更新 `BUILD_STATUS.md`。
+4. 为 Linux AMD64 和 Linux ARM64 准备本地镜像归档，验证归档内架构并更新 `BUILD_STATUS.md`。
 5. 更新 `PLATFORM_SUPPORT.md` 的验证结论。
 6. 验证 Compose 配置、健康检查、数据持久化、重复启停和应用连接。
-7. 创建版本标签并发布可校验的交付物。
+7. 运行 `publish-release.ps1`，将可校验的完整离线交付物发布到 `E:\CodexDev\ieta-znz-deploy-release`。
 8. 最后再在业务应用发布中声明依赖该版本。
 
 ## 6. 发布前检查清单
@@ -148,10 +151,10 @@ networks:
 - 所有声明 capability 都能映射到真实服务；
 - 应用清单中的 `REQUIRED_SERVICES` 均存在；
 - Compose 和 `image-list.txt` 使用一致的固定版本镜像引用；
-- 默认启动不包含未准备好的可选 LLM 服务；
+- Compose 中的每个镜像都具有 AMD64 和 ARM64 本地离线归档；
 - 健康检查与实际认证方式一致；
 - 文档、平台状态和构建清单一致；
-- 没有提交真实凭据、模型、镜像 tar 或其他镜像二进制副本。
+- 没有向 Git 或其他远端项目库提交真实凭据、模型、镜像 tar 或其他镜像二进制副本。
 
 ### 业务应用
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 EXPECTED_ARCH="arm64"
 PROJECT_NAME="${PROJECT_NAME:-ieta-znz-deploy}"
-PRESET="${1:-all-no-llm}"
+PRESET="${1:-all}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -23,13 +23,13 @@ profiles_for_preset() {
     ragflow) echo "ragflow" ;;
     cdc) echo "cdc" ;;
     dyna-report) echo "dyna-report" ;;
-    llm) echo "llm llama-cpp vllm" ;;
-    all) echo "ragflow cdc dyna-report llm llama-cpp vllm" ;;
+    all) echo "ragflow cdc dyna-report" ;;
     *) echo "ragflow cdc dyna-report" ;;
   esac
 }
 
 cd "$BASE_DIR"
+bash "$SCRIPT_DIR/load-images.sh"
 compose_args=(compose --project-name "$PROJECT_NAME" -f docker-compose.ieta-znz-deploy.yml)
 for profile in $(profiles_for_preset); do
   compose_args+=(--profile "$profile")

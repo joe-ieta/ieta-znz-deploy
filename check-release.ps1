@@ -124,4 +124,35 @@ if ($portErrors.Count -gt 0) {
   throw ".env and project-env/*.host.env ports are inconsistent"
 }
 
+Write-Host "Application manifest check"
+Get-ChildItem -LiteralPath (Join-Path $scriptDir "apps") -Filter "*.env" -File | ForEach-Object {
+  $appId = $_.BaseName
+  $appValues = Read-KeyValueFile -Path $_.FullName
+
+  if ($appValues.ContainsKey("HOST_PROBES")) {
+    foreach ($probe in $appValues["HOST_PROBES"].Split(",")) {
+      $portVar = ($probe.Trim().Split(":")[0]).Trim()
+      if (-not $envValues.ContainsKey($portVar)) {
+        throw "App '$appId' HOST_PROBES references unknown .env variable: $portVar"
+      }
+    }
+  }
+
+  if ($appValues.ContainsKey("FLINK_TOTAL_SLOTS") -and $appValues["CAPABILITIES"].Split(",") -contains "flink") {
+    if ($appValues["FLINK_TOTAL_SLOTS"] -notmatch '^\d+$') {
+      throw "App '$appId' FLINK_TOTAL_SLOTS must be numeric: $($appValues['FLINK_TOTAL_SLOTS'])"
+    }
+    foreach ($varName in @("FLINK_TASK_SLOTS", "FLINK_TM_REPLICAS")) {
+      if (-not $envValues.ContainsKey($varName) -or $envValues[$varName] -notmatch '^\d+$') {
+        throw ".env must define numeric $varName when app '$appId' declares FLINK_TOTAL_SLOTS"
+      }
+    }
+    $declaredTotal = [int]$appValues["FLINK_TOTAL_SLOTS"]
+    $actualTotal = [int]$envValues["FLINK_TASK_SLOTS"] * [int]$envValues["FLINK_TM_REPLICAS"]
+    if ($declaredTotal -ne $actualTotal) {
+      throw "App '$appId' FLINK_TOTAL_SLOTS=$declaredTotal does not match .env FLINK_TASK_SLOTS*FLINK_TM_REPLICAS=$actualTotal"
+    }
+  }
+}
+
 Write-Host "Release configuration check passed."

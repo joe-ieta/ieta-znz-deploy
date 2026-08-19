@@ -1,10 +1,11 @@
 param(
-  [ValidateSet("core", "ragflow", "cdc", "dyna-report", "llm", "all-no-llm", "all")]
-  [string]$Preset = "all-no-llm",
+  [ValidateSet("core", "ragflow", "cdc", "dyna-report", "all")]
+  [string]$Preset = "all",
   [string[]]$Profiles,
   [string]$DockerExe = "docker",
   [string]$ProjectName = "ieta-znz-deploy",
-  [switch]$SkipPortCheck
+  [switch]$SkipPortCheck,
+  [switch]$SkipImageLoad
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,8 +19,7 @@ function Resolve-Profiles {
     "ragflow" { return @("ragflow") }
     "cdc" { return @("cdc") }
     "dyna-report" { return @("dyna-report") }
-    "llm" { return @("llm", "llama-cpp", "vllm") }
-    "all" { return @("ragflow", "cdc", "dyna-report", "llm", "llama-cpp", "vllm") }
+    "all" { return @("ragflow", "cdc", "dyna-report") }
     default { return @("ragflow", "cdc", "dyna-report") }
   }
 }
@@ -50,13 +50,9 @@ function Test-RequiredPortsAvailable {
   if ($SelectedProfiles -contains "ragflow") { $names += @("MYSQL_PORT", "MINIO_PORT", "MINIO_CONSOLE_PORT", "VALKEY_PORT", "ES8_RAGFLOW_PORT") }
   if ($SelectedProfiles -contains "cdc") { $names += @("POSTGRES_PORT", "MYSQL_PORT", "ES7_CDC_PORT", "FLINK_REST_PORT") }
   if ($SelectedProfiles -contains "dyna-report") { $names += @("POSTGRES_PORT", "ONLYOFFICE_PORT") }
-  if ($SelectedProfiles -contains "llama-cpp" -or $SelectedProfiles -contains "llm") { $names += "LLAMA_CPP_PORT" }
-  if ($SelectedProfiles -contains "vllm" -or $SelectedProfiles -contains "llm") { $names += "VLLM_PORT" }
-
   $defaults = @{
     POSTGRES_PORT=5432; MYSQL_PORT=3306; MINIO_PORT=9000; MINIO_CONSOLE_PORT=9001; VALKEY_PORT=6379;
-    ES8_RAGFLOW_PORT=1200; ES7_CDC_PORT=19200; FLINK_REST_PORT=19081; ONLYOFFICE_PORT=8088;
-    LLAMA_CPP_PORT=18080; VLLM_PORT=18000
+    ES8_RAGFLOW_PORT=1200; ES7_CDC_PORT=19200; FLINK_REST_PORT=19081; ONLYOFFICE_PORT=8088
   }
 
   $busy = @()
@@ -82,6 +78,11 @@ function Test-RequiredPortsAvailable {
 
 $selectedProfiles = @(Resolve-Profiles | Select-Object -Unique)
 Write-Host "Starting ieta-znz-deploy profiles: $($selectedProfiles -join ', ')"
+
+if (-not $SkipImageLoad) {
+  & (Join-Path $scriptDir "load-images.ps1") -DockerExe $DockerExe
+  if ($LASTEXITCODE -ne 0) { throw "offline image load failed" }
+}
 
 if (-not $SkipPortCheck) { Test-RequiredPortsAvailable -SelectedProfiles $selectedProfiles }
 

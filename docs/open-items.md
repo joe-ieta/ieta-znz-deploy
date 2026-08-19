@@ -20,10 +20,9 @@
 
 ### OI-002 Elasticsearch 8 健康检查与认证不一致
 
-- 状态：open
-- 现状：`es8-ragflow` 开启 `xpack.security.enabled=true`，健康检查却使用无认证的 `curl`。
-- 风险：服务正常时仍可能因 HTTP 401 被判定为 unhealthy。
-- 目标：健康检查携带正确认证，或改用不破坏安全边界的受支持检查方式。
+- 状态：done
+- 决策：健康检查携带 `elastic:${ELASTIC_PASSWORD}` 基础认证；无认证模式服务端忽略凭据，启用认证模式不再因 401 误判 unhealthy。
+- 实现：`docker-compose.ieta-znz-deploy.yml` 中 `es8-ragflow` 健康检查使用 `curl -fs -u elastic:${ELASTIC_PASSWORD} http://localhost:9200`；`es7-cdc` 按 `ES7_SECURITY_ENABLED` 条件化携带凭据（2026-08-16）。
 - 验收：启用认证后容器能够稳定进入 healthy，错误密码时检查明确失败。
 
 ### OI-003 Dyna Report 容器模板中的 OnlyOffice 地址
@@ -58,8 +57,9 @@
 
 ### OI-007 跨平台脚本能力对齐
 
-- 状态：open
-- 现状：Windows 启动脚本提供端口预检；Ubuntu 脚本尚无等价端口预检。
+- 状态：in-progress
+- 实现：三平台 `status-app-base` 均以"服务 healthy + `HOST_PROBES` 宿主机端口探测"为成功标准并输出各端口状态，失败返回非零退出码（Linux 2026-08-16；Windows `status-app-base.ps1` 同步补齐）。
+- 剩余：Windows 启动脚本提供端口预检，Ubuntu 脚本尚无等价端口预检。
 - 目标：统一 Windows、Ubuntu AMD64、Ubuntu ARM64 的端口检查、profile 选择、状态和失败返回码。
 - 验收：三平台对配置错误、端口冲突和启动失败具有一致语义。
 
