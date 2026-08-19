@@ -1,24 +1,26 @@
 # Offline image archive inventory for local-offline-archives-only delivery.
-# Format: <relative-archive-path> <repo-tag-inside-archive>
-# The RepoTag column MUST equal the pinned image reference in
-# docker-compose.ieta-znz-deploy.yml / image-list.txt: archives are produced with
-# `docker save` of the pinned reference so a clean offline environment can `docker load`
-# the archives and `compose up` without manual re-tagging. publish-release.ps1 verifies
-# each archive exists, is non-empty, its tar-internal RepoTags match this list, and the
-# listed tag is one of the pinned image references.
-images/linux-amd64/docker.elastic.co_elasticsearch_elasticsearch_7.17.29.tar docker.elastic.co/elasticsearch/elasticsearch:7.17.29
-images/linux-amd64/elasticsearch_8.11.3.tar elasticsearch:8.11.3
-images/linux-amd64/flink_1.20.3-scala_2.12-java17.tar flink:1.20.3-scala_2.12-java17
-images/linux-amd64/mysql_8.0.39.tar mysql:8.0.39
-images/linux-amd64/onlyoffice_documentserver_latest.tar onlyoffice/documentserver:9.4.0
-images/linux-amd64/pgsty_minio_RELEASE.2026-03-25T00-00-00Z.tar pgsty/minio:RELEASE.2026-03-25T00-00-00Z
-images/linux-amd64/postgres_16.tar postgres:16.14
-images/linux-amd64/valkey_valkey_8.tar valkey/valkey:8.1.8
-images/linux-arm64/docker.elastic.co_elasticsearch_elasticsearch_7.17.29.tar docker.elastic.co/elasticsearch/elasticsearch:7.17.29
-images/linux-arm64/elasticsearch_8.11.3.tar elasticsearch:8.11.3
-images/linux-arm64/flink_1.20.3-scala_2.12-java17.tar flink:1.20.3-scala_2.12-java17
-images/linux-arm64/mysql_8.0.39.tar mysql:8.0.39
-images/linux-arm64/onlyoffice_documentserver_latest.tar onlyoffice/documentserver:9.4.0
-images/linux-arm64/pgsty_minio_RELEASE.2026-03-25T00-00-00Z.tar pgsty/minio:RELEASE.2026-03-25T00-00-00Z
-images/linux-arm64/postgres_16.tar postgres:16.14
-images/linux-arm64/valkey_valkey_8.tar valkey/valkey:8.1.8
+# Format: <platform>|<runtime-image>|<archive-image>|<relative-archive-path>
+#   platform       target container platform: linux/amd64 or linux/arm64
+#   runtime-image  pinned image reference used by docker-compose.ieta-znz-deploy.yml
+#   archive-image  repo tag stored inside the tar (produced by docker save of the pinned reference)
+#   archive path   relative to the repository root, under images/
+# R10 constraint: runtime-image == archive-image == the pinned reference in image-list.txt, so a
+# clean offline environment can `docker load` the archives and `compose up` without manual re-tagging.
+# Consumers: load-images.ps1 / scripts/ubuntu-{amd64,arm64}/load-images.sh (offline load),
+# publish-release.ps1 (release gate), scripts/windows/regenerate-archives.ps1 (archive rebuild).
+linux/amd64|docker.elastic.co/elasticsearch/elasticsearch:7.17.29|docker.elastic.co/elasticsearch/elasticsearch:7.17.29|images/linux-amd64/docker.elastic.co_elasticsearch_elasticsearch_7.17.29.tar
+linux/amd64|elasticsearch:8.11.3|elasticsearch:8.11.3|images/linux-amd64/elasticsearch_8.11.3.tar
+linux/amd64|flink:1.20.3-scala_2.12-java17|flink:1.20.3-scala_2.12-java17|images/linux-amd64/flink_1.20.3-scala_2.12-java17.tar
+linux/amd64|mysql:8.0.39|mysql:8.0.39|images/linux-amd64/mysql_8.0.39.tar
+linux/amd64|onlyoffice/documentserver:9.4.0|onlyoffice/documentserver:9.4.0|images/linux-amd64/onlyoffice_documentserver_latest.tar
+linux/amd64|pgsty/minio:RELEASE.2026-03-25T00-00-00Z|pgsty/minio:RELEASE.2026-03-25T00-00-00Z|images/linux-amd64/pgsty_minio_RELEASE.2026-03-25T00-00-00Z.tar
+linux/amd64|postgres:16.14|postgres:16.14|images/linux-amd64/postgres_16.tar
+linux/amd64|valkey/valkey:8.1.8|valkey/valkey:8.1.8|images/linux-amd64/valkey_valkey_8.tar
+linux/arm64|docker.elastic.co/elasticsearch/elasticsearch:7.17.29|docker.elastic.co/elasticsearch/elasticsearch:7.17.29|images/linux-arm64/docker.elastic.co_elasticsearch_elasticsearch_7.17.29.tar
+linux/arm64|elasticsearch:8.11.3|elasticsearch:8.11.3|images/linux-arm64/elasticsearch_8.11.3.tar
+linux/arm64|flink:1.20.3-scala_2.12-java17|flink:1.20.3-scala_2.12-java17|images/linux-arm64/flink_1.20.3-scala_2.12-java17.tar
+linux/arm64|mysql:8.0.39|mysql:8.0.39|images/linux-arm64/mysql_8.0.39.tar
+linux/arm64|onlyoffice/documentserver:9.4.0|onlyoffice/documentserver:9.4.0|images/linux-arm64/onlyoffice_documentserver_latest.tar
+linux/arm64|pgsty/minio:RELEASE.2026-03-25T00-00-00Z|pgsty/minio:RELEASE.2026-03-25T00-00-00Z|images/linux-arm64/pgsty_minio_RELEASE.2026-03-25T00-00-00Z.tar
+linux/arm64|postgres:16.14|postgres:16.14|images/linux-arm64/postgres_16.tar
+linux/arm64|valkey/valkey:8.1.8|valkey/valkey:8.1.8|images/linux-arm64/valkey_valkey_8.tar

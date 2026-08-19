@@ -34,7 +34,10 @@
 - 归档内 RepoTag **必须等于固定镜像引用**（R10）：干净环境 `docker load` 归档后 `compose up` 无需任何手动 retag。
 - 归档文件命名：仓库路径中的 `/` 替换为 `_`、`:` 替换为 `_`；`onlyoffice_documentserver_latest.tar` 是唯一
   历史遗留命名，内容仍为 `onlyoffice/documentserver:9.4.0`。
-- 归档清单：`scripts/common/image-archives.txt`，每行 `<归档相对路径> <归档内 RepoTag>`，是发布门槛的输入。
+- 归档清单：`scripts/common/image-archives.txt`，每行
+  `<platform>|<runtime-image>|<archive-image>|<归档相对路径>`；R10 约束 `runtime-image == archive-image == image-list.txt 固定引用`。
+  消费方：`load-images.ps1` / `scripts/ubuntu-{amd64,arm64}/load-images.sh`（离线装载）、`publish-release.ps1`（发布门槛）、
+  `scripts/windows/regenerate-archives.ps1`（归档重建）。
 
 ## 2. 离线镜像归档生成规范
 
@@ -96,9 +99,9 @@ Docker Desktop 使用 containerd 镜像存储：直接 `docker pull --platform <
 | --- | --- | --- |
 | B1 工作区干净 | `git status --porcelain` 为空；`release-info.json` 的 `sourceDirty` 恒为 false（R6） | 拒绝发布 |
 | B2 配置检查 | 执行 `check-release.ps1`（A1-A4） | 拒绝发布 |
-| B3 归档清单 | `scripts/common/image-archives.txt` 存在且有条目 | 拒绝发布 |
-| B4 归档标签固定 | 清单中每个 RepoTag 必须属于 `image-list.txt` 固定引用（R10） | 拒绝发布 |
-| B5 归档完整性 | 归档存在、非空、tar 内 RepoTags 与清单一致 | 拒绝发布 |
+| B3 归档清单 | `scripts/common/image-archives.txt` 存在、每行 4 列（platform/runtime-image/archive-image/path） | 拒绝发布 |
+| B4 归档标签固定 | runtime-image 与 archive-image 相等且必须属于 `image-list.txt` 固定引用（R10）；路径必须位于平台对应目录 | 拒绝发布 |
+| B5 归档完整性 | 归档存在、非空、tar 内 RepoTags 与 archive-image 一致、镜像架构与 platform 一致；每个平台必须覆盖全部基础固定镜像 | 拒绝发布 |
 | B6 组装 | 复制仓库内容到同级目录 `<父目录>\ieta-znz-deploy-release`（`-OutDir` 可覆盖） | 抛错 |
 
 ### 3.4 发布物布局与元数据

@@ -86,15 +86,21 @@ $entries = @(
 
 # Process arm64 first so the local image store ends up holding the amd64 images.
 $ordered = @()
-$ordered += $entries | Where-Object { $_ -match '^images/linux-arm64/' }
-$ordered += $entries | Where-Object { $_ -match '^images/linux-amd64/' }
+$ordered += $entries | Where-Object { $_ -match '^linux/arm64\|' }
+$ordered += $entries | Where-Object { $_ -match '^linux/amd64\|' }
 
 foreach ($line in $ordered) {
-  $parts = $line -split "\s+", 2
-  if ($parts.Count -ne 2) { throw "Malformed archive entry: $line" }
-  $relPath = $parts[0]
-  $tag = $parts[1]
-  $platform = if ($relPath -match '^images/linux-arm64/') { "linux/arm64" } else { "linux/amd64" }
+  $parts = $line.Split("|")
+  if ($parts.Count -ne 4) { throw "Malformed archive entry (expected platform|runtime-image|archive-image|path): $line" }
+  $platform = $parts[0].Trim()
+  $runtimeImage = $parts[1].Trim()
+  $archiveImage = $parts[2].Trim()
+  $relPath = $parts[3].Trim()
+  if ($platform -notin @("linux/amd64", "linux/arm64")) { throw "Unsupported platform '$platform' in entry: $line" }
+  if ($runtimeImage -ne $archiveImage) {
+    throw "R10: runtime-image and archive-image must be equal (pinned reference): $line"
+  }
+  $tag = $runtimeImage
   $arch = if ($platform -eq "linux/arm64") { "arm64" } else { "amd64" }
   $tarPath = Join-Path $BaseDir ($relPath -replace "/", "\")
 

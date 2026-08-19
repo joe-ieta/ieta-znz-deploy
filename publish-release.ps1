@@ -44,7 +44,7 @@ $archiveEntries = @(
 )
 if ($archiveEntries.Count -eq 0) { throw "scripts/common/image-archives.txt has no entries" }
 
-# Every archive RepoTag must be one of the pinned image references (compose/image-list.txt),
+# Every archive tag must be one of the pinned image references (compose/image-list.txt),
 # so a clean offline environment can load archives and `compose up` without manual retag.
 $pinnedListPath = Join-Path $scriptDir "image-list.txt"
 $pinnedImages = @(
@@ -54,13 +54,29 @@ $pinnedImages = @(
     Sort-Object -Unique
 )
 
+$archivesByPlatform = @{}
 foreach ($line in $archiveEntries) {
-  $parts = $line -split "\s+", 2
-  if ($parts.Count -ne 2) { throw "Malformed archive entry: $line" }
-  $relPath = $parts[0]
-  $expectedTag = $parts[1]
-  if ($expectedTag -notin $pinnedImages) {
-    throw "Archive $relPath lists RepoTag '$expectedTag' which is not a pinned image reference in image-list.txt"
+  $parts = $line.Split("|")
+  if ($parts.Count -ne 4) { throw "Malformed archive entry (expected platform|runtime-image|archive-image|path): $line" }
+  $platform = $parts[0].Trim()
+  $runtimeImage = $parts[1].Trim()
+  $archiveImage = $parts[2].Trim()
+  $relPath = $parts[3].Trim()
+
+  if ($platform -notin @("linux/amd64", "linux/arm64")) {
+    throw "Archive $relPath has unsupported platform '$platform'"
+  }
+  foreach ($tag in @($runtimeImage, $archiveImage)) {
+    if ($tag -notin $pinnedImages) {
+      throw "Archive $relPath lists image '$tag' which is not a pinned reference in image-list.txt"
+    }
+  }
+  if ($runtimeImage -ne $archiveImage) {
+    throw "Archive $relPath runtime-image '$runtimeImage' differs from archive-image '$archiveImage' (R10: archives are produced by docker save of the pinned reference)"
+  }
+  $expectedDir = if ($platform -eq "linux/arm64") { "images/linux-arm64" } else { "images/linux-amd64" }
+  if ($relPath -notmatch "^${expectedDir}/") {
+    throw "Archive $relPath is not under $expectedDir for platform $platform"
   }
   $fullPath = Join-Path $scriptDir ($relPath -replace "/", "\")
   if (-not (Test-Path -LiteralPath $fullPath)) { throw "Missing image archive: $relPath" }
@@ -69,10 +85,28 @@ foreach ($line in $archiveEntries) {
   if ($LASTEXITCODE -ne 0 -or -not $manifestJson) { throw "Cannot read manifest.json from archive: $relPath" }
   $manifest = $manifestJson | ConvertFrom-Json
   $repoTags = @($manifest.RepoTags)
-  if ($repoTags -notcontains $expectedTag) {
-    throw "Archive $relPath contains RepoTags [$($repoTags -join ', ')], expected $expectedTag"
+  if ($repoTags -notcontains $archiveImage) {
+    throw "Archive $relPath contains RepoTags [$($repoTags -join ', ')], expected $archiveImage"
   }
-  Write-Host "  $relPath -> $expectedTag"
+  $configRaw = & tar -xOf $fullPath $manifest.Config 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $configRaw) { throw "Cannot read image config from archive: $relPath" }
+  $config = $configRaw | ConvertFrom-Json
+  $expectedArch = if ($platform -eq "linux/arm64") { "arm64" } else { "amd64" }
+  if ($config.architecture -ne $expectedArch) {
+    throw "Archive $relPath contains $($config.architecture) image but platform is $platform"
+  }
+  if (-not $archivesByPlatform.ContainsKey($platform)) { $archivesByPlatform[$platform] = @() }
+  $archivesByPlatform[$platform] += $runtimeImage
+  Write-Host "  $relPath -> $runtimeImage [$platform]"
+}
+
+foreach ($platform in @("linux/amd64", "linux/arm64")) {
+  $images = @($archivesByPlatform[$platform])
+  $pinnedBase = @($pinnedImages | Where-Object { $_ -notmatch '^ghcr.io/|/vllm-openai:' })
+  $missing = @($pinnedBase | Where-Object { $_ -notin $images })
+  if ($missing.Count -gt 0) {
+    throw "Missing $platform offline archives for pinned images: $($missing -join ', ')"
+  }
 }
 
 Write-Host "Assembling release artifact: $OutDir"
